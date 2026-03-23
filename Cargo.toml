@@ -1,0 +1,8 @@
+[package]
+name = "VulkanRust"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+vulkano = "0.35.2"
+vulkano-win = "0.34.0"
