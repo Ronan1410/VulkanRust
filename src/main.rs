@@ -2,13 +2,18 @@ extern crate vulkano;
 extern crate winit;
 extern crate vulkano_win;
 
-use winit::{EventsLoop, WindowBuilder<dpi::LogicalSize};
 use std::sync::Arc;
-use vulkano::instance::{
+
+use winit::{EventsLoop, WindowBuilder, dpi::LogicalSize, Event, WindowEvent};
+
+use vulkano::instance::
+{
     Instance, 
     InstanceExtensions, 
-    ApplicationInfo, 
+    ApplicationInfo,
     Version,
+    layers_list,
+    PhysicalDevice,
 };
 
 use vulkano::instance::debug::{DebugCallback, MessageTypes};
@@ -16,7 +21,7 @@ use vulkano::instance::debug::{DebugCallback, MessageTypes};
 const WIDTH: u32 = 800;
 const HEIGHT: u32 = 600;
 
-const VALIDATION_LAYERS: [&str] = &[
+const VALIDATION_LAYERS: &[&str] = &[
     "VK_LAYER_LUNARG_standard_validation"
 ];
 
@@ -25,13 +30,33 @@ const ENABLE_VALIDATION_LAYERS: bool = true;
 #[cfg(not(debug_assertions))]
 const ENABLE_VALIDATION_LAYERS: bool = false;
 
+struct QueueFamilyIndices
+{
+    graphics_family: i32,
+}
+
+impl QueueFamilyIndices
+{
+    fn new() -> Self
+    {
+        Self{graphics_family: -1}
+    }
+
+    fn is_complete(&self) -> bool
+    {
+        self.graphics_family >=0
+    }
+}
+
 #[allow(unused)]
 struct HelloTriangleApplication 
 {
-    inscatnce: Arc<Instance>,
-    debug_callback: Arc<DebugCallback>,
+    instance: Arc<Instance>,
+    debug_callback: Option<DebugCallback>,
 
     events_loop: EventsLoop,
+
+    physical_device_index: usize,
 }
 
 impl HelloTriangleApplication
@@ -41,21 +66,26 @@ impl HelloTriangleApplication
         let instance = Self::create_instance();
         let debug_callback = Self::setup_debug_callback(&instance);
 
-        let events_loop = Self::init_windows();
+        let events_loop = Self::init_window();
+
+        let physical_device_index = Self::pick_physical_device(&instance);
+
         Self
         {
             instance,
             debug_callback,
 
             events_loop,
+
+            physical_device_index,
         }
     }
     fn init_window() -> EventsLoop
     {
-        let events_loop = EvnetsLoop::new();
+        let events_loop = EventsLoop::new();
         let _window_builder = WindowBuilder::new()
             .with_title("Vulkan")
-            .with_dimensions(LogicalSize::new(f64::from(WIDTH), f64::from(HEIGHT)))
+            .with_dimensions(LogicalSize::new(f64::from(WIDTH), f64::from(HEIGHT)));
             //.build(&self.events_loop.as_ref.unwrap());
         events_loop
     }
@@ -70,7 +100,7 @@ impl HelloTriangleApplication
             .expect("failed to get supported extensions");
         println!("Supported extensions: {:?}", supported_extensions);
 
-        let app info = ApplicationInfo 
+        let app_info = ApplicationInfo 
         {
             application_name: Some("Hello Triangle".into()),
             application_version: Some(Version { major: 1, minor: 0, patch: 0 }),
@@ -80,7 +110,7 @@ impl HelloTriangleApplication
 
         let required_extensions = Self::get_required_extensions();
 
-        if ENABLE_VALIDATION_LAYERS && Self::check_validation_layers_support()
+        if ENABLE_VALIDATION_LAYERS && Self::check_validation_layer_support()
         {
             Instance::new(Some(&app_info), &required_extensions, VALIDATION_LAYERS.iter().cloned())
                 .expect("failed to create Vulkan instance")
@@ -92,11 +122,11 @@ impl HelloTriangleApplication
         }
     }
 
-    fn check_validation_layer_support() -> bool
+    fn check_validation_layer_support() -> bool 
     {
         let layers: Vec<_> = layers_list().unwrap().map(|l| l.name().to_owned()).collect();
         VALIDATION_LAYERS.iter()
-            .all(|layer_name| layers.contains(&layer_name>to_string()))
+            .all(|layer_name| layers.contains(&layer_name.to_string()))
     }
 
     fn get_required_extensions() -> InstanceExtensions
@@ -109,7 +139,7 @@ impl HelloTriangleApplication
         extensions
     }
 
-    fn setup_debug_callback(instance: &arc<Instance>) -> Option<DebugCallBack>
+    fn setup_debug_callback(instance: &Arc<Instance>) -> Option<DebugCallback>
     {
         if !ENABLE_VALIDATION_LAYERS
         {
@@ -128,6 +158,37 @@ impl HelloTriangleApplication
         {
             println!("validation layer {:?}", msg.description);
         }).ok()
+    }
+
+    fn pick_physical_device(instance: &Arc<Instance>) -> usize
+    {
+        PhysicalDevice::enumerate(&instance)
+        .position(|device| Self::is_device_suitable(&device))
+        .expect("failed to find a suitable GPU")
+    }
+
+    fn is_device_suitable(device: &PhysicalDevice) -> bool
+    {
+        let indices = Self::find_queue_families(device);
+        indices.is_complete()
+    }
+
+    fn find_queue_families(device: &PhysicalDevice) -> QueueFamilyIndices
+    {
+        let mut indices = QueueFamilyIndices::new();
+
+        for (i, queue_family) in device.queue_families().enumerate()
+        {
+            if queue_family.supports_graphics()
+            {
+                indices.graphics_family = i as i32;
+            }
+            if indices.is_complete()
+            {
+                break;
+            }
+        }
+        indices
     }
 
     #[allow(unused)]
