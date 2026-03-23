@@ -1,6 +1,7 @@
 extern crate vulkano;
 extern crate winit;
 extern crate vulkano_win;
+extern crate vulkano_shaders;
 
 use std::sync::Arc;
 use std::collections::HashSet;
@@ -105,6 +106,8 @@ impl HelloTriangleApplication
         let (device, graphics_queue, present_queue) = Self::create_logical_device(&instance, &surface, physical_device_index);
 
         let (swap_chain, swap_chain_images) = Self::create_swap_chain(&instance, &surface, physical_device_index, &device, &graphics_queue, &present_queue);
+
+        Self::create_graphics_pipeline(&device);
 
         Self
         {
@@ -332,6 +335,32 @@ impl HelloTriangleApplication
             None,
         ).expect("failed to create swap chain");
         (swap_chain, images)
+    }
+
+    fn create_graphics_pipeline(_device: &Arc<Device>)
+    {
+        mod vertex_shader
+        {
+            vulkano_shaders::shader!
+            {
+                ty: "vertex",
+                parth: "src/bin/09_shader_base.vert"
+            }
+        }
+
+        mod fragment_shader
+        {
+            vulkano_shaders::shader!
+            {
+                ty: "fragment",
+                path: "src/bin/09_shader_base.frag"
+            }
+        }
+
+        let _vert_shader_module = vertex_shader::Shader::load(device.clone())
+            .expect("failed to create vertex shader module");
+        let _frag_shader_module = fragment_shader::Shader::load(device.clone())
+            .expect("failed to create fragment shader module");
     }
 
     fn find_queue_families(surface: &Arc<Surface<Window>>, device: &PhysicalDevice) -> QueueFamilyIndices
