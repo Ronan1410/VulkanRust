@@ -6,6 +6,7 @@ extern crate vulkano_shaders;
 use std::sync::Arc;
 use std::collections::HashSet;
 
+use vulkano::pipeline::viewport::Viewport;
 use winit::{EventsLoop, WindowBuilder, Window,  dpi::LogicalSize, Event, WindowEvent};
 use vulkano_win::VkSurfaceBuild;
 
@@ -35,6 +36,12 @@ use vulkano::swapchain::
 use vulkano::format::Format;
 use vulkano::image::{ImageUsage, swapchain::SwapchainImage};
 use vulkano::sync::SharingMode;
+use vulkano::pipelione::
+{
+    GraphicsPipeline,
+    vertex::BufferlessDefinition,
+    viewport::Viewport,
+};
 
 const WIDTH: u32 = 800;
 const HEIGHT: u32 = 600;
@@ -107,7 +114,7 @@ impl HelloTriangleApplication
 
         let (swap_chain, swap_chain_images) = Self::create_swap_chain(&instance, &surface, physical_device_index, &device, &graphics_queue, &present_queue);
 
-        Self::create_graphics_pipeline(&device);
+        Self::create_graphics_pipeline(&device, swap_chain.dimensions());
 
         Self
         {
@@ -337,7 +344,10 @@ impl HelloTriangleApplication
         (swap_chain, images)
     }
 
-    fn create_graphics_pipeline(_device: &Arc<Device>)
+    fn create_graphics_pipeline(
+        device: &Arc<Device>,
+        swap_chain_extent: [u32; 2],
+    )
     {
         mod vertex_shader
         {
@@ -357,10 +367,33 @@ impl HelloTriangleApplication
             }
         }
 
-        let _vert_shader_module = vertex_shader::Shader::load(device.clone())
+        let vert_shader_module = vertex_shader::Shader::load(device.clone())
             .expect("failed to create vertex shader module");
-        let _frag_shader_module = fragment_shader::Shader::load(device.clone())
+        let frag_shader_module = fragment_shader::Shader::load(device.clone())
             .expect("failed to create fragment shader module");
+
+        let dimesions = [swap_cahin_extent[0] as f32, swap_chain_extent[1] as f32];
+        let viewport = Viewport
+        {
+            origin: [0.0, 0.0],
+            dimensions,
+            depth_range: 0.0 .. 1.0,
+        };
+
+        let _pipeline_builder = Arc::new(GraphicsPipeline::start()
+            .vertex_input(BufferlessDefinition{})
+            .vertex_shader(vert_shader_module.main_entry_point(), ())
+            .triangle_list()
+            .primitive_restart(false)
+            .viewport(vec![viewport])
+            .fragment_shader(frag_shader_modules.main_entry_point(), ())
+            .depth_clamp(flase)
+            .polygon_mode_fill()
+            .line_width(1.0)
+            .cull_mode_back()
+            .fromt_face_clockwise()
+            .blend_pass_through()
+    );
     }
 
     fn find_queue_families(surface: &Arc<Surface<Window>>, device: &PhysicalDevice) -> QueueFamilyIndices
