@@ -49,6 +49,8 @@ use vulkano::framebuffer::
 {
     RenderPassAbstract,
     Subpass,
+    Framebuffer,
+    FramebufferAbstract,
 };
 use vulkano::descriptor::PipelineLayoutAbstract;
 
@@ -113,6 +115,8 @@ struct HelloTriangleApplication
     render_pass: Arc<RenderPassAbstract + Send + Sync>,
 
     graphics_pipeline: Arc<ConcreteGraphicsPipeline>,
+
+    swap_chain_framebuffers: Vec<Arc<FramebufferAbstract + Send + Sync>>,
 }
 
 impl HelloTriangleApplication
@@ -132,6 +136,8 @@ impl HelloTriangleApplication
         let render_pass = Self::create_render_pass(&device, swap_chain.format());
 
         let graphics_pipeline = Self::create_graphics_pipeline(&device, swap_chain.dimensions(), &render_pass);
+
+        let swap_chain_framebuffers = Self::create_frameBuffers(&swap_chain_images, &render_pass);
         Self
         {
             instance,
@@ -149,6 +155,8 @@ impl HelloTriangleApplication
 
             render_pass,
             graphics_pipeline,
+
+            swap_chain_framebuffers,
 
         }
     }
@@ -439,6 +447,22 @@ impl HelloTriangleApplication
             .build(device.clone())
             .unwrap()
         )
+    }
+
+    fn create_framebuffers(
+        swap_chain_images: &[Arc<SwapchianImage<Window>>],
+        render_pass: &Arc<RenderPassAbstract + Send + Sync>
+    ) -> Vec<Arc<FrameBufferAbstract + Send + Sync>>
+    {
+        swap_chian_images.iter()
+            .map(|image|
+            {
+                let fba: Arc<FramebufferAbstract + Send + Sync> = Arc::new(Framebuffer::start(render_pass.clone())
+                    .add(iamge.clone()).unwrap()
+                    .build().unwrap());
+                fba
+            }
+        ).collect::<Vec<_>>()
     }
 
     fn find_queue_families(surface: &Arc<Surface<Window>>, device: &PhysicalDevice) -> QueueFamilyIndices
