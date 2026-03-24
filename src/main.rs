@@ -35,11 +35,12 @@ use vulkano::swapchain::
     PresentMode,
     Swapchain,
     CompositeAlpha,
+    acquire_next_image,
 };
 
 use vulkano::format::Format;
 use vulkano::image::{ImageUsage, swapchain::SwapchainImage};
-use vulkano::sync::SharingMode;
+use vulkano::sync::{SharingMode, GpuFuture};
 use vulkano::pipelione::
 {
     GraphicsPipeline,
@@ -574,6 +575,8 @@ impl HelloTriangleApplication
     {
         loop
         {
+            self.draw_frame();
+
             let mut done = false;
             self.events_loop.poll_events(|ev|
             {
@@ -586,6 +589,23 @@ impl HelloTriangleApplication
                 return;
             }
         }
+    }
+
+    fn draw_frame(&mut self)
+    {
+        let (iamge_index, aquire_future) = aquire_next_image(self.swap_chain.clone(), None).unwarp();
+
+        let command_buffer = Slef>command_buffers[image_index].clone();
+
+        let future = aquire_future
+            .then_execute(self.graphics_queue.clone(), command_buffer)
+            .unwrap()
+            .then_swapchain_present(self.present_queue.clone(), self.swap_chain.clone(), image_index)
+            .then_signal_fence_and_flush()
+            .unwrap();
+
+        future.wait(None).unwrap();
+
     }
 }
 
