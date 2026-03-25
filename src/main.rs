@@ -63,7 +63,7 @@ use vulkano::command_buffer::
 };
 use vulkano::buffer::
 {
-    cpu_access::CpuAccessibleBuffer,
+    immutable::CpuAccessibleBuffer,
     BufferUsage,
     BufferAccess
 };
@@ -185,7 +185,7 @@ impl HelloTriangleApplication
 
         let swap_chain_framebuffers = Self::create_frameBuffers(&swap_chain_images, &render_pass);
         
-        let vertxt_buffer = Self::create_vertex_buffer(&device);
+        let vertex_buffer = Self::create_vertex_buffer(&graphics_queue);
 
         let previous_frame_end = Some(Self::create_sync_objects(&device));
 
@@ -527,10 +527,14 @@ impl HelloTriangleApplication
         ).collect::<Vec<_>>()
     }
 
-    fn create_vertex_buffer(device: &Arc<Device>) -> Arc<BufferAccess + Send + Sync>
+    fn create_vertex_buffer(graphics_queue: &Arc<Queue>) -> Arc<BufferAccess + Send + Sync>
     {
-        CpuAccessibleBuffer::from_iter(device.clone(),
-            BufferUsage::vertex_buffer(), vertices().iter().cloned()).unwrap()
+        let (buffer, future) = ImmutableBuffer::from_iter(
+            vertices().iter().cloned(), BufferUsage::vertex_buffer(),
+            graphics_queue_clone())
+            .unwrap();
+        future.flush().unwrap();
+        buffer
     }
 
     fn create_sync_ojects(device: &Arc<Device>) -> Box<GpuFeature>
