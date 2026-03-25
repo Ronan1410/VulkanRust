@@ -7,6 +7,7 @@ extern crate vulkano_shaders;
 use std::sync::Arc;
 use std::collections::HashSet;
 
+use vulkano::buffer::ImmutableBuffer;
 use vulkano::pipeline::GraphicsPipeline;
 use vulkano::pipeline::shader::GraphicsEntryPoint;
 use vulkano::pipeline::vertex::BufferlessVertices;
@@ -65,7 +66,8 @@ use vulkano::buffer::
 {
     immutable::CpuAccessibleBuffer,
     BufferUsage,
-    BufferAccess
+    BufferAccess,
+    TypedBufferAccess,
 };
 
 const WIDTH: u32 = 800;
@@ -124,13 +126,19 @@ impl Vertex
 
 impl_vertex!(Vertex, pos, color);
 
-fn vertices() -> [Vertex; 3]
+fn vertices() -> [Vertex; 4]
 {
     [
         Vertex::new([0.0, -0.5], [1.0, 1.0, 1.0]),
         Vertex::new([0.5, 0.5], [0.0, 1.0, 1.0]),
         Vertex::new([-0.5, 0.5], [0.0, 0.0, 1.0]),
+        Vertex::new([0.5, 0.5], [0.0, 0.0, 1.0]),
     ]
+}
+
+fn indices() ->[u16; 6]
+{
+    [0, 1, 2, 2, 3, 0]
 }
 
 type ConcreteGraphicsPipeline = GraphicsPipeline<BufferlessDefinition, Box<PipelineLayoutAbstract + Send + Sync + 'static>, Arc<RenderPassAbstract + Send + Sync + 'static>>;
@@ -159,6 +167,8 @@ struct HelloTriangleApplication
 
     vertex_buffer: Arc<BufferAccess + Send + Sync>,
 
+    index_buffer: Arc<TypedBufferAccess<Content=[u16]> + Send + Sync>,
+
     command_buffers: Vec<Arc<AutoCommandBuffer>>,
 
     previous_frame_end: Option<Box<GpuFuture>>,
@@ -186,6 +196,8 @@ impl HelloTriangleApplication
         let swap_chain_framebuffers = Self::create_frameBuffers(&swap_chain_images, &render_pass);
         
         let vertex_buffer = Self::create_vertex_buffer(&graphics_queue);
+        
+        let index_buffer = Self::create_inddex_buffer(&graphics_queue);
 
         let previous_frame_end = Some(Self::create_sync_objects(&device));
 
@@ -210,7 +222,7 @@ impl HelloTriangleApplication
             swap_chain_framebuffers,
 
             vertex_buffer,
-
+            index_buffer,
             command_buffers: vec![],
 
             previous_frame_end,
@@ -537,6 +549,16 @@ impl HelloTriangleApplication
         buffer
     }
 
+    fn create_index_Buffer(graphics_queue: Arc<Queue>) -> Arc<TypedBufferAccess<Content=[u16]> + Send + Sync>
+    {
+        let (buffer, future) = ImmutableBuffer::from_iter(
+            indices().iter().cloned(), BufferUsage::index_buffer(),
+            graphics_queue.clone())
+            .unwrap();
+        future.flush().unwrap();
+        buffer
+    }
+
     fn create_sync_ojects(device: &Arc<Device>) -> Box<GpuFeature>
     {
         Box::new(sync::now(device.clone())) as Box<GpuFuture>
@@ -548,12 +570,13 @@ impl HelloTriangleApplication
         self.command_buffers = self.swap_chain_framebuffers.iter()
             .map(|framebuffer| 
             {
-                Arc::new(AutoCommandBufferBuilder::primary_simultaneous_use(self.device.clone, queue_family)
+                Arc::new(AutoCommandBufferBuilder::primary_simultaneous_use(self.device.clone(), queue_family)
                     .unwrap()
-                    .begin_render_pass(framebuffer.clone(), false, vec![[0.0, 0.0, 0.0, 0.1].into()])
+                    .begin_render_pass(framebuffer.clone(), false, vec![[0.0, 0.0, 0.0, 1.0].into()])
                     .unwrap()
-                    .draw(self.graphics_pipeline.clone(), &DynamicState::none(),
-                        vec![self.vertex_buffer.clone()], (), ())
+                    .draw_indexed(self.graphics_pipeline.clone(), &DynamicState::none(),
+                        vec![self.vertex_buffer.clone()],
+                        self.index_buffer.clone(), (), ())
                     .unwrap()
                     .end_render_pass()
                     .unwrap()
