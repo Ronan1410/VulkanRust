@@ -3,9 +3,11 @@ extern crate vulkano;
 extern crate winit;
 extern crate vulkano_win;
 extern crate vulkano_shaders;
+extern crate cgmath;
 
 use std::sync::Arc;
 use std::collections::HashSet;
+use std::time::Instat;
 
 use vulkano::buffer::ImmutableBuffer;
 use vulkano::pipeline::GraphicsPipeline;
@@ -68,6 +70,16 @@ use vulkano::buffer::
     BufferUsage,
     BufferAccess,
     TypedBufferAccess,
+    CpuAccessibleBuffer,
+};
+
+use cgmath::
+{
+    Rad,
+    Deg,
+    Matrix4,
+    Vector3,
+    Point3
 };
 
 const WIDTH: u32 = 800;
@@ -123,8 +135,16 @@ impl Vertex
         Self{pos, color}
     }
 }
-
+#[allow(clippy:ref_in_deref)]
 impl_vertex!(Vertex, pos, color);
+
+#[allow(dead_code)]
+#[derive(Copy, Clone)]
+struct UniformBufferObject {
+    model: Matrix4<f32>,
+    view: Matrix4<f32>,
+    proj: Matrix4<f32>,
+}
 
 fn vertices() -> [Vertex; 4]
 {
@@ -169,10 +189,16 @@ struct HelloTriangleApplication
 
     index_buffer: Arc<TypedBufferAccess<Content=[u16]> + Send + Sync>,
 
+    #[allow(dead_code)]
+    uniform_buffers: Vec<Arc<CpuAccessibleBuffer<UniformBufferObject>>>,
+
     command_buffers: Vec<Arc<AutoCommandBuffer>>,
 
     previous_frame_end: Option<Box<GpuFuture>>,
     recreate_swap_chain: bool,
+
+    #[allow(dead_code)]
+    start_time: Instant,
 }
 
 impl HelloTriangleApplication
@@ -195,6 +221,8 @@ impl HelloTriangleApplication
 
         let swap_chain_framebuffers = Self::create_frameBuffers(&swap_chain_images, &render_pass);
         
+        let start_time =Instant::now();
+
         let vertex_buffer = Self::create_vertex_buffer(&graphics_queue);
         
         let index_buffer = Self::create_inddex_buffer(&graphics_queue);
@@ -223,10 +251,13 @@ impl HelloTriangleApplication
 
             vertex_buffer,
             index_buffer,
+            uniform_buffers,
             command_buffers: vec![],
 
             previous_frame_end,
             recreate_swap_chain: false,
+
+            start_time
 
         };
 
@@ -549,6 +580,33 @@ impl HelloTriangleApplication
         buffer
     }
 
+    fn create_uniform_buffers
+    (
+        device: &Arc<Dexice>,
+        num_buffers: usize,
+        start_time: Instant,
+        dimensions_u32: [u32; 2]
+    ) -> Vec<arc<CpuAccessibleBuffer<UniformBufferObject>>>
+    {
+        let mut buffers = Vec::new();
+
+        let dimensions = [dimensions_u32[0] as f32, dimensions_u32[1] as f32];
+
+        let uniform_buffer = Self::update_uniform_buffer(start_time, dimensions);
+
+        for _ in 0 .. num_buffers
+        {
+            let buffer = CpuAccessibleBuffer::from_data(
+                device.clone(),
+                BufferUsage::uniform_buffer_transfer_destination(),
+                uniform_buffer,
+            ).unwrap();
+            buffers.push(buffer);
+        }
+
+        buffers
+    }
+
     fn create_index_Buffer(graphics_queue: Arc<Queue>) -> Arc<TypedBufferAccess<Content=[u16]> + Send + Sync>
     {
         let (buffer, future) = ImmutableBuffer::from_iter(
@@ -717,6 +775,32 @@ impl HelloTriangleApplication
                 self.previous_frame_end = Some(Box::bew(vulkano::sync::now(self.device.clone())) as Box<_>);
             }
         }
+    }
+
+    fn update_uniform_buffer(start_time: Instant, dimensions: [f32; 2]) -> UniformBufferObject
+    {
+        let duration = Instant::now().duration_since(start_time);
+        let elapsed = (duration.as_secs() * 1000) + u64::from(duration.subsec_millis());
+
+        let model = Matrix4::from_angle_z(Rad::from(Deg(elapsed as f32 * 0.180)));
+
+        let view = Matrix4::look_at(
+            Point3::new(2.0, 2.0, 2.0),
+            Point3::new(0.0, 0.0, 0.0),
+            Vector3::new(0.0, 0.0, 1.0)
+        );
+
+        let mut proj = cgmath::perspective(
+            Rad::from(Deg(45.0)),
+            dimensions[0] as f32 / dimensions[1] as f32,
+            0.1,
+            10.0
+        );
+
+        proj.y.y *= -1.0;
+
+        UniformBufferObject { model, view, proj }
+    }
     }
 
     fn recreate_swap_chain(&mut self) {
